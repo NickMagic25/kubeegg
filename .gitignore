@@ -208,3 +208,6 @@ __marimo__/
 
 # worktrees
 .worktrees/
+
+# output dir
+.out/

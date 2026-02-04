@@ -1,0 +1,47 @@
+[project]
+name = "kubeegg"
+version = "0.1.0"
+description = "Generate Kustomize-ready Kubernetes manifests from Pterodactyl/Pelican game eggs."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+  { name = "kubeegg" }
+]
+keywords = ["kubernetes", "kustomize", "pterodactyl", "pelican", "game-server", "gitops"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "bcrypt>=4.1",
+  "typer>=0.12",
+  "rich>=13.7",
+  "httpx>=0.27",
+  "ruamel.yaml>=0.18",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+kubeegg = "kubeegg.cli:app"
+
+[project.urls]
+Homepage = "https://example.com"
+
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kubeegg"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
