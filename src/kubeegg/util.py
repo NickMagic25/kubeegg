@@ -5,7 +5,6 @@ import secrets
 import string
 from typing import Iterable, Tuple
 
-import bcrypt
 
 
 _K8S_NAME_RE = re.compile(r"[^a-z0-9-]+")
@@ -101,6 +100,26 @@ def generate_password(length: int = 16) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-def hash_password(password: str) -> str:
-    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
-    return hashed.decode("utf-8")
+
+
+def memory_to_mb(value: str) -> int | None:
+    raw = value.strip().lower()
+    if not raw:
+        return None
+    unit = None
+    for suffix in ("gib", "gi", "gb", "g", "mib", "mi", "mb", "m"):
+        if raw.endswith(suffix):
+            unit = suffix
+            raw = raw[: -len(suffix)]
+            break
+    raw = raw.strip()
+    if not raw or not raw.replace(".", "", 1).isdigit():
+        return None
+    amount = float(raw)
+    if unit in {"gib", "gi"}:
+        mb = amount * 1024
+    elif unit in {"gb", "g"}:
+        mb = amount * 1000
+    else:
+        mb = amount
+    return int(mb)

@@ -13,7 +13,11 @@ def write_kustomization(path: Path, resources: Iterable[str], labels: dict[str, 
         "apiVersion": "kustomize.config.k8s.io/v1beta1",
         "kind": "Kustomization",
         "resources": list(resources),
-        "commonLabels": labels,
+        "labels": [
+            {
+                "pairs": labels,
+            }
+        ],
     }
     with path.open("w", encoding="utf-8") as handle:
         yaml.dump(data, handle)

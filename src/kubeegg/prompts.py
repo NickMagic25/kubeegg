@@ -3,10 +3,9 @@ from __future__ import annotations
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
-from .models import EnvSelection, FileManagerConfig, PortSpec, PVCSpec, ResourceValues, UserConfig
+from .models import EnvSelection, FileManagerConfig, InstallConfig, PortSpec, PVCSpec, ResourceValues, UserConfig
 from .util import (
     generate_password,
-    hash_password,
     normalize_env_var,
     normalize_k8s_name,
     normalize_port_name,
@@ -113,6 +112,30 @@ def prompt_env_vars(variables) -> list[EnvSelection]:
     return selections
 
 
+def prompt_startup(startup: str | None) -> str | None:
+    if startup:
+        if Confirm.ask("Use detected startup command?", default=True):
+            return startup
+        custom = Prompt.ask("Startup command (leave blank to skip)", default="")
+        return custom.strip() or None
+    custom = Prompt.ask("Startup command (leave blank to skip)", default="")
+    return custom.strip() or None
+
+
+def prompt_install_script(egg) -> InstallConfig | None:
+    if not egg.install_script or not egg.install_image:
+        return None
+    console.print("\nInstaller script detected.")
+    enable = Confirm.ask("Run installer initContainer on first start?", default=True)
+    if not enable:
+        return None
+    return InstallConfig(
+        image=egg.install_image,
+        entrypoint=egg.install_entrypoint,
+        script=egg.install_script,
+    )
+
+
 def prompt_ports(detected_ports: list[int]) -> list[PortSpec]:
     while True:
         ports: list[int] = []
@@ -144,7 +167,7 @@ def prompt_ports(detected_ports: list[int]) -> list[PortSpec]:
 
 def prompt_file_manager(mount_path: str) -> FileManagerConfig:
     console.print("\nFile manager sidecar:")
-    console.print(f"File manager root directory: {mount_path}")
+    console.print("File manager root directory: /data")
     image = Prompt.ask("File manager image", default=FILE_MANAGER_IMAGE)
     username = Prompt.ask("File manager username", default="admin")
     auto_password = Confirm.ask("Auto-generate file manager password?", default=True)
@@ -160,11 +183,10 @@ def prompt_file_manager(mount_path: str) -> FileManagerConfig:
     while not port_raw.isdigit() or not (1 <= int(port_raw) <= 65535):
         console.print("[red]Port must be between 1 and 65535[/red]")
         port_raw = Prompt.ask("File manager web UI port", default="8080")
-    password_hash = hash_password(password)
     return FileManagerConfig(
         image=image.strip() or FILE_MANAGER_IMAGE,
         username=username,
-        password_hash=password_hash,
+        password=password,
         port=int(port_raw),
     )
 
@@ -236,8 +258,10 @@ def collect_user_config(egg) -> UserConfig:
     image = prompt_image(egg.docker_images)
     pvc = prompt_pvc(app_name)
     env = prompt_env_vars(egg.variables)
+    startup_command = prompt_startup(egg.startup)
     ports = prompt_ports(egg.ports)
     file_manager = prompt_file_manager(pvc.mount_path)
+    install = prompt_install_script(egg)
     resources = prompt_resources()
     return UserConfig(
         app_name=app_name,
@@ -247,5 +271,7 @@ def collect_user_config(egg) -> UserConfig:
         env=env,
         ports=ports,
         file_manager=file_manager,
+        startup_command=startup_command,
+        install=install,
         resources=resources,
     )

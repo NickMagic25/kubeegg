@@ -21,6 +21,9 @@ class Egg:
     docker_images: dict[str, str]
     variables: list[EggVariable] = field(default_factory=list)
     ports: list[int] = field(default_factory=list)
+    install_script: Optional[str] = None
+    install_image: Optional[str] = None
+    install_entrypoint: Optional[str] = None
 
 
 @dataclass
@@ -50,8 +53,15 @@ class PVCSpec:
 class FileManagerConfig:
     image: str
     username: str
-    password_hash: str
+    password: str
     port: int
+
+
+@dataclass
+class InstallConfig:
+    image: str
+    entrypoint: str | None
+    script: str
 
 
 @dataclass
@@ -71,4 +81,6 @@ class UserConfig:
     env: list[EnvSelection]
     ports: list[PortSpec]
     file_manager: FileManagerConfig
+    startup_command: Optional[str] = None
+    install: Optional[InstallConfig] = None
     resources: Optional[ResourceValues] = None

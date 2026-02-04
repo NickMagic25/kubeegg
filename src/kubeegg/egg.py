@@ -113,6 +113,23 @@ def _extract_ports(data: dict[str, Any], variables: list[EggVariable]) -> list[i
     return sorted(ports)
 
 
+def _extract_installation(data: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
+    scripts = data.get("scripts")
+    if not isinstance(scripts, dict):
+        return None, None, None
+    installation = scripts.get("installation")
+    if not isinstance(installation, dict):
+        return None, None, None
+    script = installation.get("script")
+    if isinstance(script, str):
+        script = script.replace("\r\n", "\n")
+    else:
+        script = None
+    image = installation.get("container")
+    entrypoint = installation.get("entrypoint")
+    return script, str(image) if image else None, str(entrypoint) if entrypoint else None
+
+
 def parse_egg(data: dict[str, Any]) -> Egg:
     name = data.get("name") or data.get("title")
     description = data.get("description")
@@ -120,6 +137,7 @@ def parse_egg(data: dict[str, Any]) -> Egg:
     images = _extract_images(data)
     variables = _extract_variables(data)
     ports = _extract_ports(data, variables)
+    install_script, install_image, install_entrypoint = _extract_installation(data)
     return Egg(
         name=str(name) if name is not None else None,
         description=str(description) if description is not None else None,
@@ -127,4 +145,7 @@ def parse_egg(data: dict[str, Any]) -> Egg:
         docker_images=images,
         variables=variables,
         ports=ports,
+        install_script=install_script,
+        install_image=install_image,
+        install_entrypoint=install_entrypoint,
     )
