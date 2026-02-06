@@ -63,10 +63,10 @@ The following files are generated in the output directory:
 - Storage uses a ReadWriteMany PVC for game data, plus a separate 1Gi ReadWriteOnce PVC mounted at `/config` for the file manager.
 - The sidecar exposes a single web UI port for file uploads/downloads.
 - No Ingress, Gateway, or LoadBalancer resources are created.
-- File manager credentials are stored in the Secret as plain values.
+- File manager password is stored in the Secret as a bcrypt hash (and the plaintext password for init user provisioning).
+- File manager Deployment includes an initContainer that provisions or updates the admin user in the config DB.
 - File manager mounts the PVC at `/data` and `/config` per the image's expectations. citeturn0view0
-- Pod security context sets RuntimeDefault seccomp and drops all capabilities. The game pod is allowed to run as root; the file manager pod runs as non-root.
-- File manager pod runs as UID/GID 1000.
+- Pod security context sets RuntimeDefault seccomp and drops all capabilities. Both pods run as non-root UID/GID 1000 with fsGroup 1000.
 - Egg startup commands are exposed via a `STARTUP` environment variable when available.
 - If the startup command contains `{{SERVER_MEMORY}}` and a memory limit is set, kubeegg replaces it with the limit (in MB).
 - If an egg contains an installer script, kubeegg can add an initContainer that runs it once (guarded by a marker file in the PVC).

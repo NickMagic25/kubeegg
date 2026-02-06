@@ -53,7 +53,8 @@ class PVCSpec:
 class FileManagerConfig:
     image: str
     username: str
-    password: str
+    password_plain: str
+    password_hash: str
     port: int
 
 

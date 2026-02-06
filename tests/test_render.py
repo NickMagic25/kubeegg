@@ -24,7 +24,8 @@ def test_render_all_outputs():
         file_manager=FileManagerConfig(
             image="hurlenko/filebrowser:latest",
             username="admin",
-            password="pass",
+            password_plain="pass",
+            password_hash="$2b$12$exampleexampleexampleexamplE5QzCOpR1vG9Q2o/UVUqqNn7hRy",
             port=8080,
         ),
         startup_command="java -Xmx{{SERVER_MEMORY}}M -jar server.jar",
@@ -52,6 +53,7 @@ def test_render_all_outputs():
 
     secret = manifests["secret.yaml"]
     assert secret["stringData"]["FB_USERNAME"] == "admin"
+    assert secret["stringData"]["FB_PASSWORD_PLAIN"] == "pass"
     assert secret["stringData"]["SECRET_VAR"] == "bar"
 
     configmap = manifests["configmap.yaml"]
@@ -73,6 +75,8 @@ def test_render_all_outputs():
     env_names = {item["name"] for item in fm_container["env"]}
     assert "FB_ROOT" in env_names
     assert "FB_DATABASE" in env_names
+    init_containers = fm_deployment["spec"]["template"]["spec"]["initContainers"]
+    assert init_containers[0]["name"] == "file-manager-init"
     mounts = {m["mountPath"] for m in fm_container["volumeMounts"]}
     assert "/data" in mounts
     assert "/config" in mounts

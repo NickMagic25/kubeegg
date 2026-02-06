@@ -6,6 +6,7 @@ from rich.prompt import Confirm, Prompt
 from .models import EnvSelection, FileManagerConfig, InstallConfig, PortSpec, PVCSpec, ResourceValues, UserConfig
 from .util import (
     generate_password,
+    hash_password,
     normalize_env_var,
     normalize_k8s_name,
     normalize_port_name,
@@ -183,10 +184,13 @@ def prompt_file_manager(mount_path: str) -> FileManagerConfig:
     while not port_raw.isdigit() or not (1 <= int(port_raw) <= 65535):
         console.print("[red]Port must be between 1 and 65535[/red]")
         port_raw = Prompt.ask("File manager web UI port", default="8080")
+    password_hash = hash_password(password)
+    password_hash = hash_password(password)
     return FileManagerConfig(
         image=image.strip() or FILE_MANAGER_IMAGE,
         username=username,
-        password=password,
+        password_plain=password,
+        password_hash=password_hash,
         port=int(port_raw),
     )
 

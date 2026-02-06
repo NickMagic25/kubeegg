@@ -251,6 +251,10 @@ def render_deployment(
                 "spec": {
                     "securityContext": {
                         "seccompProfile": {"type": "RuntimeDefault"},
+                        "runAsNonRoot": True,
+                        "runAsUser": 1000,
+                        "runAsGroup": 1000,
+                        "fsGroup": 1000,
                     },
                     "containers": [main_container],
                     "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": config.pvc.name}}],
@@ -302,6 +306,49 @@ def render_file_manager_deployment(
         },
     }
 
+    init_script = "\n".join(
+        [
+            "set -e",
+            "DB=/config/filebrowser.db",
+            "ROOT=/data",
+            "USER=\"$FB_USERNAME\"",
+            "PASS=\"$FB_PASSWORD_PLAIN\"",
+            "if [ ! -f \"$DB\" ]; then",
+            "  filebrowser config init --database \"$DB\" --root \"$ROOT\"",
+            "fi",
+            "if filebrowser users find \"$USER\" --database \"$DB\" >/dev/null 2>&1; then",
+            "  filebrowser users update \"$USER\" --password \"$PASS\" --database \"$DB\"",
+            "else",
+            "  filebrowser users add \"$USER\" \"$PASS\" --perm.admin --database \"$DB\"",
+            "fi",
+        ]
+    )
+
+    init_container = {
+        "name": "file-manager-init",
+        "image": config.file_manager.image,
+        "command": ["sh", "-c", init_script],
+        "env": [
+            {
+                "name": "FB_USERNAME",
+                "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "FB_USERNAME"}},
+            },
+            {
+                "name": "FB_PASSWORD_PLAIN",
+                "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "FB_PASSWORD_PLAIN"}},
+            },
+        ],
+        "volumeMounts": [
+            {"name": "data", "mountPath": "/data"},
+            {"name": "config", "mountPath": "/config"},
+        ],
+        "securityContext": {
+            "allowPrivilegeEscalation": False,
+            "capabilities": {"drop": ["ALL"]},
+            "runAsNonRoot": True,
+        },
+    }
+
     return {
         "apiVersion": "apps/v1",
         "kind": "Deployment",
@@ -323,6 +370,7 @@ def render_file_manager_deployment(
                         "runAsGroup": 1000,
                         "fsGroup": 1000,
                     },
+                    "initContainers": [init_container],
                     "containers": [file_manager_container],
                     "volumes": [
                         {"name": "data", "persistentVolumeClaim": {"claimName": config.pvc.name}},
@@ -397,7 +445,8 @@ def render_all(config: UserConfig, secret_filename: str = "secret.yaml") -> dict
 
     secret_data = {
         "FB_USERNAME": config.file_manager.username,
-        "FB_PASSWORD": config.file_manager.password,
+        "FB_PASSWORD": config.file_manager.password_hash,
+        "FB_PASSWORD_PLAIN": config.file_manager.password_plain,
     }
     secret_data.update(secret_env)
     secret_name = f"{config.app_name}-secret"
