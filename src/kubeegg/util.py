@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import re
-import secrets
-import string
 from typing import Iterable, Tuple
 
-import bcrypt
 
 
 _K8S_NAME_RE = re.compile(r"[^a-z0-9-]+")
@@ -94,18 +91,6 @@ def ensure_unique(items: Iterable[str]) -> list[str]:
         seen.add(item)
         output.append(item)
     return output
-
-
-def generate_password(length: int = 16) -> str:
-    alphabet = string.ascii_letters + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(length))
-
-
-def hash_password(password: str) -> str:
-    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=10, prefix=b"2a"))
-    return hashed.decode("utf-8")
-
-
 
 
 def memory_to_mb(value: str) -> int | None:

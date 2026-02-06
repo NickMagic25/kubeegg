@@ -169,14 +169,15 @@ def render_installer_configmap(config: UserConfig) -> dict[str, Any]:
 def _build_init_container(
     config: UserConfig,
     configmap_name: str | None,
-    secret_name: str,
+    secret_name: str | None,
 ) -> dict[str, Any]:
     install = config.install
     command = [install.entrypoint or "sh", "/kubeegg-installer/install.sh"]
     env_from: list[dict[str, Any]] = []
     if configmap_name:
         env_from.append({"configMapRef": {"name": configmap_name}})
-    env_from.append({"secretRef": {"name": secret_name}})
+    if secret_name:
+        env_from.append({"secretRef": {"name": secret_name}})
     init_container: dict[str, Any] = {
         "name": "installer",
         "image": install.image,
@@ -197,7 +198,7 @@ def _build_init_container(
 def render_deployment(
     config: UserConfig,
     configmap_data: dict[str, str],
-    secret_name: str,
+    secret_name: str | None,
     sensitive_env_keys: list[str],
 ) -> dict[str, Any]:
     labels = _labels(config.app_name, component="game")
@@ -208,11 +209,12 @@ def render_deployment(
     if configmap_name:
         main_env_from.append({"configMapRef": {"name": configmap_name}})
 
-    for key in sensitive_env_keys:
-        main_container_env.append({
-            "name": key,
-            "valueFrom": {"secretKeyRef": {"name": secret_name, "key": key}},
-        })
+    if secret_name:
+        for key in sensitive_env_keys:
+            main_container_env.append({
+                "name": key,
+                "valueFrom": {"secretKeyRef": {"name": secret_name, "key": key}},
+            })
 
     main_container: dict[str, Any] = {
         "name": "app",
@@ -266,18 +268,9 @@ def render_deployment(
 
 def render_file_manager_deployment(
     config: UserConfig,
-    secret_name: str,
 ) -> dict[str, Any]:
     labels = _labels(config.app_name, component="file-manager")
     file_manager_env: list[dict[str, Any]] = [
-        {
-            "name": "FB_USERNAME",
-            "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "FB_USERNAME"}},
-        },
-        {
-            "name": "FB_PASSWORD",
-            "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "FB_PASSWORD"}},
-        },
         {"name": "FB_ROOT", "value": "/data"},
         {"name": "FB_ADDRESS", "value": "0.0.0.0"},
         {"name": "FB_PORT", "value": str(config.file_manager.port)},
@@ -294,49 +287,6 @@ def render_file_manager_deployment(
                 "protocol": "TCP",
                 "name": normalize_port_name("file-ui"),
             }
-        ],
-        "volumeMounts": [
-            {"name": "data", "mountPath": "/data"},
-            {"name": "config", "mountPath": "/config"},
-        ],
-        "securityContext": {
-            "allowPrivilegeEscalation": False,
-            "capabilities": {"drop": ["ALL"]},
-            "runAsNonRoot": True,
-        },
-    }
-
-    init_script = "\n".join(
-        [
-            "set -e",
-            "DB=/config/filebrowser.db",
-            "ROOT=/data",
-            "USER=\"$FB_USERNAME\"",
-            "PASS=\"$FB_PASSWORD_PLAIN\"",
-            "if [ ! -f \"$DB\" ]; then",
-            "  filebrowser config init --database \"$DB\" --root \"$ROOT\"",
-            "fi",
-            "if filebrowser users find \"$USER\" --database \"$DB\" >/dev/null 2>&1; then",
-            "  filebrowser users update \"$USER\" --password \"$PASS\" --database \"$DB\"",
-            "else",
-            "  filebrowser users add \"$USER\" \"$PASS\" --perm.admin --database \"$DB\"",
-            "fi",
-        ]
-    )
-
-    init_container = {
-        "name": "file-manager-init",
-        "image": config.file_manager.image,
-        "command": ["sh", "-c", init_script],
-        "env": [
-            {
-                "name": "FB_USERNAME",
-                "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "FB_USERNAME"}},
-            },
-            {
-                "name": "FB_PASSWORD_PLAIN",
-                "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "FB_PASSWORD_PLAIN"}},
-            },
         ],
         "volumeMounts": [
             {"name": "data", "mountPath": "/data"},
@@ -370,7 +320,6 @@ def render_file_manager_deployment(
                         "runAsGroup": 1000,
                         "fsGroup": 1000,
                     },
-                    "initContainers": [init_container],
                     "containers": [file_manager_container],
                     "volumes": [
                         {"name": "data", "persistentVolumeClaim": {"claimName": config.pvc.name}},
@@ -443,13 +392,8 @@ def render_all(config: UserConfig, secret_filename: str = "secret.yaml") -> dict
         configmap_data = dict(configmap_data)
         configmap_data["STARTUP"] = startup
 
-    secret_data = {
-        "FB_USERNAME": config.file_manager.username,
-        "FB_PASSWORD": config.file_manager.password_hash,
-        "FB_PASSWORD_PLAIN": config.file_manager.password_plain,
-    }
-    secret_data.update(secret_env)
-    secret_name = f"{config.app_name}-secret"
+    secret_data = dict(secret_env)
+    secret_name = f"{config.app_name}-secret" if secret_data else None
 
     manifests: dict[str, dict[str, Any]] = {
         "namespace.yaml": render_namespace(config),
@@ -458,7 +402,8 @@ def render_all(config: UserConfig, secret_filename: str = "secret.yaml") -> dict
     manifests["fm-config-pvc.yaml"] = render_file_manager_config_pvc(config)
     if configmap_data:
         manifests["configmap.yaml"] = render_configmap(config, configmap_data)
-    manifests[secret_filename] = render_secret(config, secret_data)
+    if secret_data:
+        manifests[secret_filename] = render_secret(config, secret_data)
     if config.install:
         manifests["installer-configmap.yaml"] = render_installer_configmap(config)
     deployment = render_deployment(config, configmap_data, secret_name, list(secret_env.keys()))
@@ -474,7 +419,7 @@ def render_all(config: UserConfig, secret_filename: str = "secret.yaml") -> dict
             }
         )
     manifests["deployment.yaml"] = deployment
-    manifests["ftp-deployment.yaml"] = render_file_manager_deployment(config, secret_name)
+    manifests["ftp-deployment.yaml"] = render_file_manager_deployment(config)
     if config.ports:
         manifests["service.yaml"] = render_service(config)
     manifests["ftp-service.yaml"] = render_file_manager_service(config)

@@ -5,8 +5,6 @@ from rich.prompt import Confirm, Prompt
 
 from .models import EnvSelection, FileManagerConfig, InstallConfig, PortSpec, PVCSpec, ResourceValues, UserConfig
 from .util import (
-    generate_password,
-    hash_password,
     normalize_env_var,
     normalize_k8s_name,
     normalize_port_name,
@@ -68,7 +66,20 @@ def prompt_image(images: dict[str, str]) -> str:
 def prompt_pvc(app_name: str) -> PVCSpec:
     pvc_name = Prompt.ask("PVC name", default=f"{app_name}-data")
     pvc_name = normalize_k8s_name(pvc_name)
-    size = Prompt.ask("PVC size", default="10Gi")
+    size_raw = Prompt.ask("PVC size (GB)", default="10")
+    size_value = size_raw.strip()
+    if size_value:
+        lower = size_value.lower()
+        if lower.endswith("gi"):
+            size = size_value
+        elif lower.endswith("g") or lower.endswith("gb"):
+            size = f"{lower.rstrip('bg').strip()}Gi"
+        elif lower.replace(".", "", 1).isdigit():
+            size = f"{size_value}Gi"
+        else:
+            size = size_value
+    else:
+        size = "10Gi"
     mount_path = Prompt.ask("PVC mount path", default="/home/container")
     storage_class = Prompt.ask("storageClassName (optional)", default="")
     storage_class = storage_class.strip() or None
@@ -170,27 +181,12 @@ def prompt_file_manager(mount_path: str) -> FileManagerConfig:
     console.print("\nFile manager sidecar:")
     console.print("File manager root directory: /data")
     image = Prompt.ask("File manager image", default=FILE_MANAGER_IMAGE)
-    username = Prompt.ask("File manager username", default="admin")
-    auto_password = Confirm.ask("Auto-generate file manager password?", default=True)
-    if auto_password:
-        password = generate_password()
-        console.print("Generated file manager password:")
-        console.print(password)
-    else:
-        password = Prompt.ask("File manager password", password=True)
-    while not password:
-        password = Prompt.ask("File manager password", password=True)
     port_raw = Prompt.ask("File manager web UI port", default="8080")
     while not port_raw.isdigit() or not (1 <= int(port_raw) <= 65535):
         console.print("[red]Port must be between 1 and 65535[/red]")
         port_raw = Prompt.ask("File manager web UI port", default="8080")
-    password_hash = hash_password(password)
-    password_hash = hash_password(password)
     return FileManagerConfig(
         image=image.strip() or FILE_MANAGER_IMAGE,
-        username=username,
-        password_plain=password,
-        password_hash=password_hash,
         port=int(port_raw),
     )
 

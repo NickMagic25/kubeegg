@@ -54,7 +54,7 @@ The following files are generated in the output directory:
 - `service.yaml`
 - `ftp-service.yaml` (file manager web UI Service)
 - `configmap.yaml` (only if non-sensitive env vars are provided)
-- `secret.yaml` (always includes file manager credentials; also includes sensitive env vars)
+- `secret.yaml` (only if sensitive env vars are provided)
 - `installer-configmap.yaml` (only if an egg installer script is enabled)
 
 ## Notes
@@ -63,8 +63,7 @@ The following files are generated in the output directory:
 - Storage uses a ReadWriteMany PVC for game data, plus a separate 1Gi ReadWriteOnce PVC mounted at `/config` for the file manager.
 - The sidecar exposes a single web UI port for file uploads/downloads.
 - No Ingress, Gateway, or LoadBalancer resources are created.
-- File manager password is stored in the Secret as a bcrypt hash (and the plaintext password for init user provisioning).
-- File manager Deployment includes an initContainer that provisions or updates the admin user in the config DB.
+- File manager credentials are not injected; manage users via the file manager UI.
 - File manager mounts the PVC at `/data` and `/config` per the image's expectations. citeturn0view0
 - Pod security context sets RuntimeDefault seccomp and drops all capabilities. Both pods run as non-root UID/GID 1000 with fsGroup 1000.
 - Egg startup commands are exposed via a `STARTUP` environment variable when available.
