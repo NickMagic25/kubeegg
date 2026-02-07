@@ -211,3 +211,6 @@ __marimo__/
 
 # output dir
 .out*/
+
+# OS files
+.DS_Store
