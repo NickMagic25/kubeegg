@@ -2,6 +2,10 @@
 
 `kubeegg` is a terminal CLI that converts a Pelican / Pterodactyl game egg JSON into a Kustomize-ready Kubernetes manifest set.
 
+## Status Checks
+
+[![CI](https://github.com/NickMagic25/kubeegg/actions/workflows/ci.yml/badge.svg)](https://github.com/NickMagic25/kubeegg/actions/workflows/ci.yml) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=NickMagic25_kubeegg&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=NickMagic25_kubeegg)
+
 ## Build & Install (Required)
 
 ```bash
@@ -70,3 +74,5 @@ The following files are generated in the output directory:
 - If the startup command contains `{{SERVER_MEMORY}}` and a memory limit is set, kubeegg replaces it with the limit (in MB).
 - If an egg contains an installer script, kubeegg can add an initContainer that runs it once (guarded by a marker file in the PVC).
 - Manifests are deterministic and GitOps-friendly.
+
+[![SonarQube Cloud](https://sonarcloud.io/images/project_badges/sonarcloud-highlight.svg)](https://sonarcloud.io/summary/new_code?id=NickMagic25_kubeegg)
