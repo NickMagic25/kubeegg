@@ -5,6 +5,8 @@ from rich.prompt import Confirm, Prompt
 
 from .models import EnvSelection, FileManagerConfig, InstallConfig, PortSpec, PVCSpec, ResourceValues, UserConfig
 from .util import (
+    STARTUP_BUILTIN_VARS,
+    extract_startup_vars,
     normalize_env_var,
     normalize_k8s_name,
     normalize_port_name,
@@ -253,12 +255,39 @@ def prompt_resources() -> ResourceValues | None:
     )
 
 
+def prompt_missing_startup_vars(startup: str, env: list[EnvSelection]) -> list[EnvSelection]:
+    """Check startup command for {{VAR}} references missing from env and prompt the user."""
+    referenced = extract_startup_vars(startup)
+    existing_keys = {e.key for e in env}
+    missing = sorted(referenced - existing_keys - STARTUP_BUILTIN_VARS)
+    if not missing:
+        return []
+    console.print("\n[yellow]The startup command references variables not yet configured:[/yellow]")
+    for var in missing:
+        console.print(f"  - {var}")
+    additions: list[EnvSelection] = []
+    for var in missing:
+        console.print(f"\n[bold]{var}[/bold] (referenced in startup command)")
+        value = Prompt.ask(f"Value for {var}")
+        env_upper = var.upper()
+        sensitive_default = any(token in env_upper for token in ["PASS", "SECRET", "TOKEN", "KEY"])
+        force_secret = env_upper in FORCE_SECRET_VARS
+        if force_secret:
+            sensitive = True
+        else:
+            sensitive = Confirm.ask("Is this value sensitive?", default=sensitive_default)
+        additions.append(EnvSelection(key=var, value=value, sensitive=sensitive))
+    return additions
+
+
 def collect_user_config(egg) -> UserConfig:
     app_name, namespace = prompt_app_identity(egg.name)
     image = prompt_image(egg.docker_images)
     pvc = prompt_pvc(app_name)
     env = prompt_env_vars(egg.variables)
     startup_command = prompt_startup(egg.startup)
+    if startup_command:
+        env.extend(prompt_missing_startup_vars(startup_command, env))
     ports = prompt_ports(egg.ports)
     file_manager = prompt_file_manager(pvc.mount_path)
     install = prompt_install_script(egg)
