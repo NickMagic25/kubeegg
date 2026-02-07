@@ -207,7 +207,7 @@ def prompt_ports(detected_ports: list[int], port_env_names: dict[int, str] | Non
     return port_specs
 
 
-def prompt_file_manager(mount_path: str) -> FileManagerConfig:
+def prompt_file_manager() -> FileManagerConfig:
     console.print("\nFile manager sidecar:")
     console.print("File manager root directory: /data")
     image = Prompt.ask("File manager image", default=FILE_MANAGER_IMAGE)
@@ -319,7 +319,7 @@ def collect_user_config(egg) -> UserConfig:
     env_ports, port_env_names = ports_from_env(env)
     all_detected = sorted(set(egg.ports) | set(env_ports))
     ports = prompt_ports(all_detected, port_env_names)
-    file_manager = prompt_file_manager(pvc.mount_path)
+    file_manager = prompt_file_manager()
     install = prompt_install_script(egg)
     resources = prompt_resources()
     return UserConfig(

@@ -87,7 +87,6 @@ def _extract_ports(data: dict[str, Any], variables: list[EggVariable]) -> list[i
             text = val.strip()
             if text.isdigit():
                 ports.add(int(text))
-            return
 
     config = data.get("config")
     if isinstance(config, dict):
