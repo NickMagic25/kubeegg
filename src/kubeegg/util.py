@@ -93,6 +93,17 @@ def ensure_unique(items: Iterable[str]) -> list[str]:
     return output
 
 
+_STARTUP_VAR_RE = re.compile(r"\{\{(\w+)\}\}")
+
+# Variables handled specially by the renderer, not needed in env
+STARTUP_BUILTIN_VARS = {"SERVER_MEMORY"}
+
+
+def extract_startup_vars(startup: str) -> set[str]:
+    """Extract all {{VAR_NAME}} references from a startup command."""
+    return set(_STARTUP_VAR_RE.findall(startup))
+
+
 def memory_to_mb(value: str) -> int | None:
     raw = value.strip().lower()
     if not raw:

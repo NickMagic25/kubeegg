@@ -5,6 +5,8 @@ from rich.prompt import Confirm, Prompt
 
 from .models import EnvSelection, FileManagerConfig, InstallConfig, PortSpec, PVCSpec, ResourceValues, UserConfig
 from .util import (
+    STARTUP_BUILTIN_VARS,
+    extract_startup_vars,
     normalize_env_var,
     normalize_k8s_name,
     normalize_port_name,
@@ -148,19 +150,44 @@ def prompt_install_script(egg) -> InstallConfig | None:
     )
 
 
-def prompt_ports(detected_ports: list[int]) -> list[PortSpec]:
+def ports_from_env(env: list[EnvSelection]) -> tuple[list[int], dict[int, str]]:
+    """Extract port numbers from env vars whose key contains _PORT.
+
+    Returns a sorted list of ports and a mapping of port number to env var name.
+    """
+    ports: set[int] = set()
+    port_names: dict[int, str] = {}
+    for item in env:
+        if "_PORT" in item.key.upper() or item.key.upper() == "PORT":
+            value = item.value.strip()
+            if value.isdigit():
+                port = int(value)
+                if 1 <= port <= 65535:
+                    ports.add(port)
+                    port_names.setdefault(port, item.key)
+    return sorted(ports), port_names
+
+
+def prompt_ports(detected_ports: list[int], port_env_names: dict[int, str] | None = None) -> list[PortSpec]:
+    env_names = port_env_names or {}
     while True:
         ports: list[int] = []
         if detected_ports:
             display = ", ".join(str(p) for p in detected_ports)
             use_detected = Confirm.ask(f"Use detected ports [{display}]?", default=True)
             if use_detected:
-                ports = detected_ports
+                ports = list(detected_ports)
         if not ports:
             raw = Prompt.ask("Container ports to expose (comma-separated, empty to skip)", default="")
             if raw.strip():
                 ports = parse_ports(raw)
         if ports:
+            extra = Prompt.ask("Additional ports to expose (comma-separated, empty to skip)", default="")
+            if extra.strip():
+                existing = set(ports)
+                for p in parse_ports(extra):
+                    if p not in existing:
+                        ports.append(p)
             break
         if Confirm.ask("No ports selected. Continue without a game Service?", default=False):
             return []
@@ -170,7 +197,10 @@ def prompt_ports(detected_ports: list[int]) -> list[PortSpec]:
         protocol = protocol.strip().upper() or "TCP"
         if protocol not in {"TCP", "UDP"}:
             protocol = "TCP"
-        name_default = normalize_port_name(f"game-{port}")
+        if port in env_names:
+            name_default = normalize_port_name(env_names[port])
+        else:
+            name_default = normalize_port_name(f"game-{port}")
         name = Prompt.ask(f"Service port name for {port}", default=name_default)
         name = normalize_port_name(name)
         port_specs.append(PortSpec(container_port=port, protocol=protocol, name=name))
@@ -253,13 +283,42 @@ def prompt_resources() -> ResourceValues | None:
     )
 
 
+def prompt_missing_startup_vars(startup: str, env: list[EnvSelection]) -> list[EnvSelection]:
+    """Check startup command for {{VAR}} references missing from env and prompt the user."""
+    referenced = extract_startup_vars(startup)
+    existing_keys = {e.key for e in env}
+    missing = sorted(referenced - existing_keys - STARTUP_BUILTIN_VARS)
+    if not missing:
+        return []
+    console.print("\n[yellow]The startup command references variables not yet configured:[/yellow]")
+    for var in missing:
+        console.print(f"  - {var}")
+    additions: list[EnvSelection] = []
+    for var in missing:
+        console.print(f"\n[bold]{var}[/bold] (referenced in startup command)")
+        value = Prompt.ask(f"Value for {var}")
+        env_upper = var.upper()
+        sensitive_default = any(token in env_upper for token in ["PASS", "SECRET", "TOKEN", "KEY"])
+        force_secret = env_upper in FORCE_SECRET_VARS
+        if force_secret:
+            sensitive = True
+        else:
+            sensitive = Confirm.ask("Is this value sensitive?", default=sensitive_default)
+        additions.append(EnvSelection(key=var, value=value, sensitive=sensitive))
+    return additions
+
+
 def collect_user_config(egg) -> UserConfig:
     app_name, namespace = prompt_app_identity(egg.name)
     image = prompt_image(egg.docker_images)
     pvc = prompt_pvc(app_name)
     env = prompt_env_vars(egg.variables)
     startup_command = prompt_startup(egg.startup)
-    ports = prompt_ports(egg.ports)
+    if startup_command:
+        env.extend(prompt_missing_startup_vars(startup_command, env))
+    env_ports, port_env_names = ports_from_env(env)
+    all_detected = sorted(set(egg.ports) | set(env_ports))
+    ports = prompt_ports(all_detected, port_env_names)
     file_manager = prompt_file_manager(pvc.mount_path)
     install = prompt_install_script(egg)
     resources = prompt_resources()
