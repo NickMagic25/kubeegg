@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 from kubeegg.models import EnvSelection
-from kubeegg.prompts import prompt_missing_startup_vars
+from kubeegg.prompts import ports_from_env, prompt_missing_startup_vars
 from kubeegg.util import extract_startup_vars
 
 
@@ -70,3 +70,50 @@ def test_prompt_missing_startup_vars_prompts_missing(mock_prompt, mock_confirm):
     # SERVER_NAME doesn't contain sensitive tokens, but Confirm mock returns True
     server_name = next(e for e in result if e.key == "SERVER_NAME")
     assert server_name.value == "myvalue"
+
+
+def test_ports_from_env_basic():
+    env = [
+        EnvSelection(key="SERVER_PORT", value="25565", sensitive=False),
+        EnvSelection(key="STEAM_PORT", value="27015", sensitive=False),
+        EnvSelection(key="SERVER_NAME", value="test", sensitive=False),
+    ]
+    ports, names = ports_from_env(env)
+    assert ports == [25565, 27015]
+    assert names == {25565: "SERVER_PORT", 27015: "STEAM_PORT"}
+
+
+def test_ports_from_env_exact_port_key():
+    env = [
+        EnvSelection(key="PORT", value="8080", sensitive=False),
+    ]
+    ports, names = ports_from_env(env)
+    assert ports == [8080]
+    assert names == {8080: "PORT"}
+
+
+def test_ports_from_env_skips_non_numeric():
+    env = [
+        EnvSelection(key="SERVER_PORT", value="{{SERVER_PORT}}", sensitive=False),
+        EnvSelection(key="QUERY_PORT", value="27016", sensitive=False),
+    ]
+    ports, names = ports_from_env(env)
+    assert ports == [27016]
+    assert names == {27016: "QUERY_PORT"}
+
+
+def test_ports_from_env_empty():
+    ports, names = ports_from_env([])
+    assert ports == []
+    assert names == {}
+
+
+def test_ports_from_env_skips_out_of_range():
+    env = [
+        EnvSelection(key="BAD_PORT", value="0", sensitive=False),
+        EnvSelection(key="HUGE_PORT", value="99999", sensitive=False),
+        EnvSelection(key="GOOD_PORT", value="8080", sensitive=False),
+    ]
+    ports, names = ports_from_env(env)
+    assert ports == [8080]
+    assert names == {8080: "GOOD_PORT"}

@@ -150,19 +150,44 @@ def prompt_install_script(egg) -> InstallConfig | None:
     )
 
 
-def prompt_ports(detected_ports: list[int]) -> list[PortSpec]:
+def ports_from_env(env: list[EnvSelection]) -> tuple[list[int], dict[int, str]]:
+    """Extract port numbers from env vars whose key contains _PORT.
+
+    Returns a sorted list of ports and a mapping of port number to env var name.
+    """
+    ports: set[int] = set()
+    port_names: dict[int, str] = {}
+    for item in env:
+        if "_PORT" in item.key.upper() or item.key.upper() == "PORT":
+            value = item.value.strip()
+            if value.isdigit():
+                port = int(value)
+                if 1 <= port <= 65535:
+                    ports.add(port)
+                    port_names.setdefault(port, item.key)
+    return sorted(ports), port_names
+
+
+def prompt_ports(detected_ports: list[int], port_env_names: dict[int, str] | None = None) -> list[PortSpec]:
+    env_names = port_env_names or {}
     while True:
         ports: list[int] = []
         if detected_ports:
             display = ", ".join(str(p) for p in detected_ports)
             use_detected = Confirm.ask(f"Use detected ports [{display}]?", default=True)
             if use_detected:
-                ports = detected_ports
+                ports = list(detected_ports)
         if not ports:
             raw = Prompt.ask("Container ports to expose (comma-separated, empty to skip)", default="")
             if raw.strip():
                 ports = parse_ports(raw)
         if ports:
+            extra = Prompt.ask("Additional ports to expose (comma-separated, empty to skip)", default="")
+            if extra.strip():
+                existing = set(ports)
+                for p in parse_ports(extra):
+                    if p not in existing:
+                        ports.append(p)
             break
         if Confirm.ask("No ports selected. Continue without a game Service?", default=False):
             return []
@@ -172,7 +197,10 @@ def prompt_ports(detected_ports: list[int]) -> list[PortSpec]:
         protocol = protocol.strip().upper() or "TCP"
         if protocol not in {"TCP", "UDP"}:
             protocol = "TCP"
-        name_default = normalize_port_name(f"game-{port}")
+        if port in env_names:
+            name_default = normalize_port_name(env_names[port])
+        else:
+            name_default = normalize_port_name(f"game-{port}")
         name = Prompt.ask(f"Service port name for {port}", default=name_default)
         name = normalize_port_name(name)
         port_specs.append(PortSpec(container_port=port, protocol=protocol, name=name))
@@ -288,7 +316,9 @@ def collect_user_config(egg) -> UserConfig:
     startup_command = prompt_startup(egg.startup)
     if startup_command:
         env.extend(prompt_missing_startup_vars(startup_command, env))
-    ports = prompt_ports(egg.ports)
+    env_ports, port_env_names = ports_from_env(env)
+    all_detected = sorted(set(egg.ports) | set(env_ports))
+    ports = prompt_ports(all_detected, port_env_names)
     file_manager = prompt_file_manager(pvc.mount_path)
     install = prompt_install_script(egg)
     resources = prompt_resources()
