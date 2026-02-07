@@ -16,6 +16,7 @@ from .render import render_all
 
 app = typer.Typer(add_completion=False, invoke_without_command=True)
 console = Console()
+kustomize="kustomization.yaml"
 
 
 def _write_yaml(path: Path, data: dict) -> None:
@@ -47,9 +48,8 @@ def _write_outputs(out_dir: Path, manifests: dict[str, dict], extra_files: list[
     filenames = list(manifests.keys())
     to_check = filenames + extra_files
     existing = [out_dir / name for name in to_check if (out_dir / name).exists()]
-    if existing and not force:
-        if not _prompt_overwrite(existing):
-            raise typer.Exit(code=1)
+    if existing and (not force) and (not _prompt_overwrite(existing)):
+        raise typer.Exit(code=1)
     for name, data in manifests.items():
         _write_yaml(out_dir / name, data)
     return filenames
@@ -92,15 +92,15 @@ def main(
 
     secret_filename = "secrets.sops.yaml" if sops else "secret.yaml"
     manifests = render_all(config, secret_filename=secret_filename)
-    written = _write_outputs(out, manifests, ["kustomization.yaml"], force)
+    written = _write_outputs(out, manifests, [kustomize], force)
 
-    write_kustomization(out / "kustomization.yaml", written, {
+    write_kustomization(out / kustomize, written, {
         "app.kubernetes.io/name": config.app_name,
         "app.kubernetes.io/managed-by": "kubeegg",
     })
 
     console.print("\nGenerated:")
-    for name in ["kustomization.yaml"] + written:
+    for name in [kustomize] + written:
         console.print(f"  - {name}")
 
 
