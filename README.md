@@ -1,10 +1,7 @@
+[![CI](https://github.com/NickMagic25/kubeegg/actions/workflows/ci.yml/badge.svg)](https://github.com/NickMagic25/kubeegg/actions/workflows/ci.yml) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=NickMagic25_kubeegg&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=NickMagic25_kubeegg)
 # kubeegg
 
 `kubeegg` is a terminal CLI that converts a Pelican / Pterodactyl game egg JSON into a Kustomize-ready Kubernetes manifest set.
-
-## Status Checks
-
-[![CI](https://github.com/NickMagic25/kubeegg/actions/workflows/ci.yml/badge.svg)](https://github.com/NickMagic25/kubeegg/actions/workflows/ci.yml) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=NickMagic25_kubeegg&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=NickMagic25_kubeegg)
 
 ## Build & Install (Required)
 
