@@ -32,7 +32,7 @@ dev = [
 kubeegg = "kubeegg.cli:app"
 
 [project.urls]
-Homepage = "https://example.com"
+Homepage = "https://github.com/NickMagic25/kubeegg"
 
 [build-system]
 requires = ["hatchling>=1.24"]
