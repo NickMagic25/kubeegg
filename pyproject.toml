@@ -1,6 +1,6 @@
 [project]
 name = "kubeegg"
-version = "0.1.0"
+version = "0.1.2"
 description = "Generate Kustomize-ready Kubernetes manifests from Pterodactyl/Pelican game eggs."
 readme = "README.md"
 requires-python = ">=3.11"
