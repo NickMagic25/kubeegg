@@ -27,9 +27,14 @@ dependencies = [
 dev = [
   "pytest>=8.0",
 ]
+api = [
+  "fastapi>=0.115",
+  "uvicorn>=0.34",
+]
 
 [project.scripts]
 kubeegg = "kubeegg.cli:app"
+kubeegg-api = "kubeegg.api:main"
 
 [project.urls]
 Homepage = "https://github.com/NickMagic25/kubeegg"

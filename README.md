@@ -1,9 +1,17 @@
 [![CI](https://github.com/NickMagic25/kubeegg/actions/workflows/ci.yml/badge.svg)](https://github.com/NickMagic25/kubeegg/actions/workflows/ci.yml) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=NickMagic25_kubeegg&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=NickMagic25_kubeegg)
 # kubeegg
 
-`kubeegg` is a terminal CLI that converts a Pelican / Pterodactyl game egg JSON into a Kustomize-ready Kubernetes manifest set.
+`kubeegg` is a terminal CLI that converts a Pelican / Pterodactyl game egg JSON into a Kustomize-ready Kubernetes manifest set. It also ships an optional FastAPI server for use as a containerized service.
 
-## Build & Install (Required)
+## Install
+
+### CLI
+
+```bash
+pip install kubeegg
+```
+
+Or with uv:
 
 ```bash
 uv sync
@@ -11,13 +19,13 @@ uv build
 uv tool install dist/*.whl
 ```
 
-Verify:
+### API server
 
 ```bash
-kubeegg --help
+pip install kubeegg[api]
 ```
 
-## Usage
+## CLI Usage
 
 ```bash
 kubeegg <URL-or-path-to-egg.json>
@@ -41,6 +49,25 @@ To write the Secret as a SOPS-compatible filename:
 ```bash
 kubeegg <egg.json> --sops
 ```
+
+## API Usage
+
+Start the server:
+
+```bash
+kubeegg-api
+```
+
+Parse an egg's requirements:
+
+```bash
+curl -X POST http://localhost:8000/requirements \
+  -H 'Content-Type: application/json' \
+  -d '{"source": "path/to/egg.json"}'
+```
+
+The `source` field accepts a local file path or a URL (including GitHub blob URLs, which are automatically converted to raw URLs).
+
 
 ## Output
 
