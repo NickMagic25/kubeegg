@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
@@ -143,10 +145,12 @@ def prompt_install_script(egg) -> InstallConfig | None:
     enable = Confirm.ask("Run installer initContainer on first start?", default=True)
     if not enable:
         return None
+    version_hash = hashlib.sha256(egg.install_script.encode()).hexdigest()[:8]
     return InstallConfig(
         image=egg.install_image,
         entrypoint=egg.install_entrypoint,
         script=egg.install_script,
+        version_hash=version_hash,
     )
 
 

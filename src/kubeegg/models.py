@@ -60,6 +60,7 @@ class InstallConfig:
     image: str
     entrypoint: str | None
     script: str
+    version_hash: str
 
 
 @dataclass

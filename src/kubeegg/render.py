@@ -133,13 +133,13 @@ def _resources_block(config: UserConfig) -> dict[str, Any] | None:
     return resources
 
 
-def _wrap_install_script(script: str) -> str:
+def _wrap_install_script(script: str, version_hash: str) -> str:
     return "\n".join(
         [
             "#!/bin/sh",
             "# Note: set -e is intentionally omitted because Pterodactyl egg scripts",
             "# use grep for condition checks, which returns exit code 1 on no match.",
-            "MARKER=/mnt/server/.kubeegg_installed",
+            f"MARKER=/mnt/server/.kubeegg_installed_{version_hash}",
             "if [ -f \"$MARKER\" ]; then",
             "  echo \"Installer already completed.\"",
             "  exit 0",
@@ -151,7 +151,7 @@ def _wrap_install_script(script: str) -> str:
 
 
 def render_installer_configmap(config: UserConfig) -> dict[str, Any]:
-    script = _wrap_install_script(config.install.script)
+    script = _wrap_install_script(config.install.script, config.install.version_hash)
     return {
         "apiVersion": "v1",
         "kind": "ConfigMap",
@@ -193,6 +193,65 @@ def _build_init_container(
         },
     }
     return init_container
+
+
+def render_installer_job(
+    config: UserConfig,
+    configmap_name: str | None,
+    secret_name: str | None,
+) -> dict[str, Any]:
+    install = config.install
+    version_hash = install.version_hash
+    command = [install.entrypoint or "sh", "/kubeegg-installer/install.sh"]
+    env_from: list[dict[str, Any]] = []
+    if configmap_name:
+        env_from.append({"configMapRef": {"name": configmap_name}})
+    if secret_name:
+        env_from.append({"secretRef": {"name": secret_name}})
+    container: dict[str, Any] = {
+        "name": "installer",
+        "image": install.image,
+        "command": command,
+        "envFrom": env_from,
+        "volumeMounts": [
+            {"name": "data", "mountPath": "/mnt/server"},
+            {"name": "installer", "mountPath": "/kubeegg-installer"},
+        ],
+        "securityContext": {
+            "allowPrivilegeEscalation": False,
+            "capabilities": {"drop": ["ALL"]},
+        },
+    }
+    return {
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "metadata": {
+            "name": f"{config.app_name}-installer-{version_hash}",
+            "namespace": config.namespace,
+            "labels": _labels(config.app_name, component="installer"),
+        },
+        "spec": {
+            "backoffLimit": 3,
+            "template": {
+                "metadata": {"labels": _labels(config.app_name, component="installer")},
+                "spec": {
+                    "restartPolicy": "OnFailure",
+                    "securityContext": {
+                        "seccompProfile": {"type": "RuntimeDefault"},
+                        "runAsNonRoot": True,
+                        "runAsUser": 1000,
+                        "runAsGroup": 1000,
+                        "fsGroup": 1000,
+                    },
+                    "containers": [container],
+                    "volumes": [
+                        {"name": "data", "persistentVolumeClaim": {"claimName": config.pvc.name}},
+                        {"name": "installer", "configMap": {"name": f"{config.app_name}-installer"}},
+                    ],
+                },
+            },
+        },
+    }
 
 
 def render_deployment(
@@ -406,18 +465,22 @@ def render_all(config: UserConfig, secret_filename: str = "secret.yaml") -> dict
         manifests[secret_filename] = render_secret(config, secret_data)
     if config.install:
         manifests["installer-configmap.yaml"] = render_installer_configmap(config)
+        configmap_name = f"{config.app_name}-config" if configmap_data else None
+        manifests["installer-job.yaml"] = render_installer_job(config, configmap_name, secret_name)
     deployment = render_deployment(config, configmap_data, secret_name, list(secret_env.keys()))
     if config.install:
-        configmap_name = f"{config.app_name}-config" if configmap_data else None
-        init_container = _build_init_container(config, configmap_name, secret_name)
-        deployment["spec"]["template"]["spec"]["initContainers"] = [init_container]
-        volumes = deployment["spec"]["template"]["spec"]["volumes"]
-        volumes.append(
-            {
-                "name": "installer",
-                "configMap": {"name": f"{config.app_name}-installer"},
-            }
-        )
+        version_hash = config.install.version_hash
+        wait_container = {
+            "name": "wait-for-install",
+            "image": "busybox:1.37",
+            "command": [
+                "sh",
+                "-c",
+                f"until [ -f /mnt/server/.kubeegg_installed_{version_hash} ]; do echo 'Waiting for installer job...'; sleep 5; done",
+            ],
+            "volumeMounts": [{"name": "data", "mountPath": "/mnt/server"}],
+        }
+        deployment["spec"]["template"]["spec"]["initContainers"] = [wait_container]
     manifests["deployment.yaml"] = deployment
     manifests["ftp-deployment.yaml"] = render_file_manager_deployment(config)
     if config.ports:
